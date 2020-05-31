@@ -77,6 +77,9 @@ class CPU
     @y = 0
   end
 
+  class Flags
+  end
+
   def step
     program.src[@pc].call(self)
     self
