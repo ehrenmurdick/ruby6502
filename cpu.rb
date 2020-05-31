@@ -15,6 +15,9 @@ class Program
           cpu.pc += 1
           block.call(cpu, self, *args)
         end
+        line.define_singleton_method :asm do
+          %Q{#{name} #{args[0]}}
+        end
         prog.src.append(line)
         prog.ac += 1
       end
@@ -40,8 +43,10 @@ class Program
     cpu.flags.update 'nvzc', (cpu.a + val)
     cpu.a += val
   end
-  opcode :adc_z  do |cpu, f, val|
-    adc_im cpu, f, cpu.memory(val)
+  opcode :adc_z  do |cpu, _, addr|
+    val = cpu.memory[addr]
+    cpu.flags.update 'nvzc', (cpu.a + val)
+    cpu.a += val
   end
 
   opcode :jmp_ab do |cpu, prog, label|
@@ -110,7 +115,7 @@ class CPU
     @pc = 0
     @program = program
     @running = true
-    @memory = []
+    @memory = Array.new(10) { 0 }
     @a = 0
     @x = 0
     @y = 0
@@ -159,7 +164,9 @@ class CPU
   end
 
   def step
-    program.src[@pc].call(self)
+    src = program.src[@pc]
+    @inst = src
+    src.call(self)
     self
   end
 
@@ -172,7 +179,11 @@ class CPU
   end
 
   def inspect
-    "6502 pc=#{pc} run=#{running ? 't' : 'f'} fs=#{flags.inspect} \n a=#{a} x=#{x} y=#{} \n-------"
+%Q{6502 pc=#{pc} run=#{running ? 't' : 'f'} fs=#{flags.inspect}
+#{@inst && @inst.asm}
+a=#{a} x=#{x} y=#{}
+#{memory}
+-------}
   end
 end
 
