@@ -40,6 +40,9 @@ class Program
     cpu.flags.update 'nvzc', (cpu.a + val)
     cpu.a += val
   end
+  opcode :adc_z  do |cpu, f, val|
+    adc_im cpu, f, cpu.memory(val)
+  end
 
   opcode :jmp_ab do |cpu, prog, label|
     cpu.pc = prog.labels[label]
