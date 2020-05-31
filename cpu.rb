@@ -9,11 +9,14 @@ class Program
   end
 
   def self.opcode name, &block
-    define_method(name) do
+    define_method(name) do |*args|
       outerBlock = lambda do |prog|
-        line = block
+        line = lambda do |cpu|
+          cpu.pc += 1
+          block.call(cpu, self, *args)
+        end
         prog.src.append(line)
-        prog.ac = ac + 1
+        prog.ac += 1
       end
       outerBlock.call(self)
     end
@@ -33,48 +36,31 @@ class Program
     labels[name] = ac
   end
 
-  opcode :jmp_a do |cpu|
-    cpu.pc = labels[label]
+  opcode :jmp_a do |cpu, prog, label|
+    cpu.pc = prog.labels[label]
   end
 
   opcode :inx do |cpu|
-    cpu.x = cpu.x + 1
+    cpu.x += 1
     if cpu.x > 0xff
       cpu.x = 0
     end
-    cpu.pc += 1
   end
-
 
   opcode :brk do |cpu|
     cpu.running = false
   end
 
-  def lda_i val
-    line = lambda do |cpu|
-      cpu.a = val
-      cpu.pc += 1
-    end
-    @src.append(line)
-    self.ac = ac + 1
+  opcode :lda_i do |cpu, _, val|
+    cpu.a = val
   end
 
-  def sta_a loc
-    line = lambda do |cpu|
-      cpu.memory[loc] = cpu.a
-      cpu.pc += 1
-    end
-    @src.append(line)
-    self.ac = ac + 1
+  opcode :sta_a do |cpu, _, val|
+    cpu.memory[val] = cpu.a
   end
 
-  def tax
-    line = lambda do |cpu|
-      cpu.x = cpu.a
-      cpu.pc += 1
-    end
-    @src.append(line)
-    self.ac = ac + 1
+  opcode :tax do |cpu|
+    cpu.x = cpu.a
   end
 end
 
@@ -86,6 +72,9 @@ class CPU
     @program = program
     @running = true
     @memory = []
+    @a = 0
+    @x = 0
+    @y = 0
   end
 
   def step
@@ -102,9 +91,9 @@ class CPU
   end
 end
 
-p = Program.load('example.s.rb')
+program = Program.load('example.s.rb')
 
-cpu = CPU.new(p)
+cpu = CPU.new(program)
 cpu.run do |c|
   p c
 end
