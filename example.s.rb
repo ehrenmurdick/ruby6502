@@ -1,10 +1,8 @@
 
 
-lda_i 1
-tax
-inx
-inx
-
-sta_a 1
+lda_im 0
+3.times do
+  adc_im 100
+end
 
 brk
