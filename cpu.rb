@@ -146,7 +146,7 @@ class Program
     cpu.flags.update 'nz', val
   end
 
-  opcode :asl_a, %w{ ip } do |cpu, prog, addr, val|
+  opcode :asl_ac, %w{ ip } do |cpu, prog, addr, val|
     cpu.flags.c = !(cpu.a & 0b1000_0000).zero?
     cpu.a = cpu.a << 1
     cpu.flags.update 'nz', cpu.a
@@ -158,6 +158,85 @@ class Program
     cpu.flags.update 'nz', val
     cpu.memory[addr] = val
   end
+
+  opcode :lsr_ac, %w{ ip } do |cpu, prog, addr, _|
+    cpu.flags.c = !(cpu.a & 1).zero?
+    cpu.a = cpu.a >> 1
+    cpu.flags.update 'nz', cpu.a
+  end
+
+  opcode :lsr, %w{ z zx ab ax } do |cpu, prog, addr, val|
+    cpu.flags.c = !(val & 1).zero?
+    val = val >> 1
+    cpu.flags.update 'nz', cpu.a
+    cpu.memory[addr] = val
+  end
+
+  opcode :rol_ac, %w{ ip } do |cpu, prog, addr, _|
+    carry = cpu.flags.c ? 1 : 0
+    cpu.flags.c = !(cpu.a & 0b1000_0000).zero?
+    cpu.a = carry + (cpu.a << 1)
+    cpu.flags.update 'nz', cpu.a
+  end
+
+  opcode :rol, %w{ z zx ab ax } do |cpu, prog, addr, val|
+    carry = cpu.flags.c ? 1 : 0
+    cpu.flags.c = !(val & 0b1000_0000).zero?
+    val = carry + (val << 1)
+    cpu.flags.update 'nz', val
+    cpu.memory[addr] = val
+  end
+
+  opcode :ror_ac, %w{ ip } do |cpu, prog, addr, _|
+    carry = cpu.flags.c ? 128 : 0
+    cpu.flags.c = !(cpu.a & 1).zero?
+    cpu.a = carry + (cpu.a >> 1)
+    cpu.flags.update 'nz', cpu.a
+  end
+
+  opcode :ror, %w{ z zx ab ax } do |cpu, prog, addr, val|
+    carry = cpu.flags.c ? 128 : 0
+    cpu.flags.c = !(val & 1).zero?
+    val = carry + (val >> 1)
+    cpu.flags.update 'nz', val
+    cpu.memory[addr] = val
+  end
+
+  opcode :and, %w{ im z zx ab ax ay ix iy iz } do |cpu, prog, addr, val|
+    val = val & cpu.a
+    cpu.flags.update 'nz', val
+    cpu.a = val
+  end
+
+  opcode :ora, %w{ im z zx ab ax ay ix iy iz } do |cpu, prog, addr, val|
+    val = val | cpu.a
+    cpu.flags.update 'nz', val
+    cpu.a = val
+  end
+
+  opcode :eor, %w{ im z zx ab ax ay ix iy iz } do |cpu, prog, addr, val|
+    val = val ^ cpu.a
+    cpu.flags.update 'nz', val
+    cpu.a = val
+  end
+
+  opcode :bit, %w{ im z zx ab ax ay ix iy iz } do |cpu, prog, addr, val|
+    val = val & cpu.a
+    cpu.flags.update 'nzv', val
+  end
+
+  opcode :cmp, %w{ im z zx ab ax ay ix iy iz } do |cpu, prog, addr, val|
+    cpu.flags.n = false
+    if cpu.a > val
+      cpu.flags.c, cpu.flags.z = true, false
+    elsif cpu.a < val
+      cpu.flags.n = true
+      cpu.flags.c, cpu.flags.z = false, false
+    else
+      cpu.flags.c, cpu.flags.z = true, true
+    end
+  end
+
 
   %w{ c d i v }.each do |f|
     opcode :"cl#{f}", %w{ ip } do |cpu, _, _, _|
@@ -290,4 +369,5 @@ program = Program.load('example.s.rb')
 cpu = CPU.new(program)
 cpu.run do |c|
   p c
+  gets
 end

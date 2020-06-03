@@ -1,18 +1,7 @@
+lda_im 1
 
-lda_im 0x01
-sta_ab 0
-asl_ab 0
-asl_ab 0
-asl_ab 0
-asl_ab 0
-asl_ab 0
-asl_ab 0
-asl_ab 0
-asl_ab 0
-asl_ab 0
-asl_ab 0
-asl_ab 0
-asl_ab 0
-
+cmp_im 0
+cmp_im 1
+cmp_im 2
 
 brk
