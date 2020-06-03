@@ -8,20 +8,71 @@ class Program
     prog
   end
 
-  def self.opcode name, &block
-    define_method(name) do |*args|
-      outerBlock = lambda do |prog|
-        line = lambda do |cpu|
-          cpu.pc += 1
-          block.call(cpu, self, *args)
-        end
-        line.define_singleton_method :asm do
-          %Q{#{name} #{args[0]}}
-        end
-        prog.src.append(line)
-        prog.ac += 1
+  ADDR_MODES = {
+    "ip" => ->(cpu, addr) { nil },
+    "im" => ->(cpu, addr) { nil },
+    "ab" => ->(cpu, addr) { addr },
+    "z"  => ->(cpu, addr) { addr },
+    "zx" => ->(cpu, addr) { addr + cpu.x },
+    "zy" => ->(cpu, addr) { addr + cpu.y },
+    "ax" => ->(cpu, addr) { addr + cpu.x},
+    "ay" => ->(cpu, addr) { addr + cpu.y },
+    "iz" => ->(cpu, addr) {
+      low = cpu.memory[addr]
+      high = cpu.memory[addr + 1] * 0x100
+      low + high
+    },
+    "ix" => ->(cpu, addr) {
+      low = cpu.memory[addr + cpu.x]
+      high = cpu.memory[addr + 1 + cpu.x] * 0x100
+      low + high
+    },
+    "iax" => ->(cpu, addr) {
+      low = cpu.memory[addr + cpu.x]
+      high = cpu.memory[addr + 1 + cpu.x] * 0x100
+      low + high
+    },
+    "iy" => ->(cpu, addr) {
+      low = cpu.memory[addr]
+      high = cpu.memory[addr + 1] * 0x100
+      low + high + cpu.y
+    },
+    "ia" => ->(cpu, addr) {
+      low = cpu.memory[addr]
+      high = cpu.memory[addr + 1] * 0x100
+      low + high
+    },
+  }
+
+  def self.opcode name, modes, &block
+    modes.each do |mode|
+      if mode == "ip"
+        method_name = name
+      else
+        method_name = [name, mode].compact.join('_')
       end
-      outerBlock.call(self)
+      define_method(method_name.to_sym) do |*args|
+        addr = args[0]
+        outerBlock = lambda do |prog|
+          line = lambda do |cpu|
+            cpu.pc += 1
+            value = nil
+            final_addr = ADDR_MODES[mode].call(cpu, addr)
+            if !final_addr.nil?
+              value = cpu.memory[final_addr]
+            else
+              value = addr
+            end
+            block.call(cpu, self, final_addr, value)
+          end
+          line.define_singleton_method :asm do
+            %Q{#{method_name} #{addr ? addr.to_s(16) : addr}}
+          end
+          prog.src.append(line)
+          prog.ac += 1
+        end
+        outerBlock.call(self)
+      end
     end
   end
 
@@ -39,54 +90,58 @@ class Program
     labels[name] = ac
   end
 
-  opcode :adc_im do |cpu, _, val|
-    cpu.flags.update 'nvzc', (cpu.a + val)
-    cpu.a += val
-  end
-  opcode :adc_z  do |cpu, _, addr|
-    val = cpu.memory[addr]
+  opcode :adc, %w{ im z zx ab ax ay ix iy iz } do |cpu, _, addr, val|
     cpu.flags.update 'nvzc', (cpu.a + val)
     cpu.a += val
   end
 
-  opcode :jmp_ab do |cpu, prog, label|
+  opcode :jmp, %w{ ab } do |cpu, prog, _, label|
     cpu.pc = prog.labels[label]
   end
 
-  opcode :ina do |cpu|
+  opcode :ina, %w{ im } do |cpu, prog, _, _|
     cpu.a += 1
   end
-  opcode :inx do |cpu|
+  opcode :inx, %w{ im } do |cpu, prog, _, _|
     cpu.x += 1
   end
 
-  opcode :brk do |cpu|
+  opcode :brk, %w{ ip } do |cpu, _, _, _|
     cpu.running = false
   end
 
-  opcode :lda_im do |cpu, _, val|
+  opcode :lda, %w{ im z zx ab ax ay ix iy iz } do |cpu, prog, addr, val|
     cpu.a = val
-    cpu.flags.update 'z', val
-  end
-  opcode :lda_ab do |cpu, _, val|
-    cpu.a = cpu.memory[val]
-    cpu.flags.update 'z', val
-  end
-  opcode :lda_z do |cpu, _, val|
-    cpu.a = cpu.memory[val]
-    cpu.flags.update 'z', val
-  end
-  opcode :lda_zx do |cpu, _, val|
-    cpu.a = cpu.memory[val]
-    cpu.flags.update 'z', val
+    cpu.flags.update 'nz', val
   end
 
-
-  opcode :sta_ab do |cpu, _, val|
-    cpu.memory[val] = cpu.a
+  opcode :ldx, %w{ im z zy ab ay } do |cpu, prog, addr, val|
+    cpu.x = val
+    cpu.flags.update 'nz', val
   end
 
-  opcode :tax do |cpu|
+  opcode :ldy, %w{ im z zy ab ay } do |cpu, prog, addr, val|
+    cpu.y = val
+    cpu.flags.update 'nz', val
+  end
+
+  opcode :sta, %w{ z ax ab ax ay ix iy  iz } do |cpu, prog, addr, val|
+    cpu.memory[addr] = cpu.a
+  end
+
+  opcode :stx, %w{ z zy ab } do |cpu, prog, addr, val|
+    cpu.memory[addr] = cpu.x
+  end
+
+  opcode :sty, %w{ z zy ab } do |cpu, prog, addr, val|
+    cpu.memory[addr] = cpu.y
+  end
+
+  opcode :stz, %w{ z zx ab ax } do |cpu, prog, addr, val|
+    cpu.memory[addr] = 0
+  end
+
+  opcode :tax, %w{ ip } do |cpu, _, _, val|
     cpu.x = cpu.a
     cpu.flags.update 'nz', val
   end
@@ -102,10 +157,7 @@ class CPU
       end
 
       define_method(:"#{name}=") do |v|
-        if v > 255
-          v -= 256
-        end
-        instance_variable_set("@#{name}", v)
+        instance_variable_set("@#{name}", v.to_i % 256)
       end
     end
   end
@@ -115,7 +167,7 @@ class CPU
     @pc = 0
     @program = program
     @running = true
-    @memory = Array.new(10) { 0 }
+    @memory = {}
     @a = 0
     @x = 0
     @y = 0
@@ -144,7 +196,7 @@ class CPU
     def update list, value
       cs = list.split('')
       cs.each do |c|
-        nf = OPS[c.to_sym].call(value)
+        nf = OPS[c.to_sym].call(value.to_i)
         instance_variable_set("@#{c}", nf)
       end
     end
@@ -181,10 +233,18 @@ class CPU
   def inspect
 %Q{6502 pc=#{pc} run=#{running ? 't' : 'f'} fs=#{flags.inspect}
 #{@inst && @inst.asm}
-a=#{a} x=#{x} y=#{}
-#{memory}
+a=#{a.to_s(16)} x=#{x.to_s(16)} y=#{}
+#{hexify(memory)}
 -------}
   end
+end
+
+def hexify(hash)
+  h = {}
+  hash.each do |key, value|
+    h[key.to_s(16)] = value.to_s(16)
+  end
+  h
 end
 
 program = Program.load('example.s.rb')
