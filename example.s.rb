@@ -1,8 +1,18 @@
 
-lda_im 0xf0
+lda_im 0x01
+sta_ab 0
+asl_ab 0
+asl_ab 0
+asl_ab 0
+asl_ab 0
+asl_ab 0
+asl_ab 0
+asl_ab 0
+asl_ab 0
+asl_ab 0
+asl_ab 0
+asl_ab 0
+asl_ab 0
 
-6.times do
-  adc_im 0x06
-end
 
 brk

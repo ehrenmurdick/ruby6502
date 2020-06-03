@@ -146,6 +146,19 @@ class Program
     cpu.flags.update 'nz', val
   end
 
+  opcode :asl_a, %w{ ip } do |cpu, prog, addr, val|
+    cpu.flags.c = !(cpu.a & 0b1000_0000).zero?
+    cpu.a = cpu.a << 1
+    cpu.flags.update 'nz', cpu.a
+  end
+
+  opcode :asl, %w{ z ax ab ax } do |cpu, prog, addr, val|
+    cpu.flags.c = !(val & 0b1000_0000).zero?
+    val = val << 1
+    cpu.flags.update 'nz', val
+    cpu.memory[addr] = val
+  end
+
   %w{ c d i v }.each do |f|
     opcode :"cl#{f}", %w{ ip } do |cpu, _, _, _|
       cpu.flags.send(:"#{f}=", false)
@@ -153,6 +166,12 @@ class Program
     opcode :"se#{f}", %w{ ip } do |cpu, _, _, _|
       cpu.flags.send(:"#{f}=", true)
     end
+  end
+end
+
+class Memory < Hash
+  def []=(key, value)
+    super(key, value % 256)
   end
 end
 
@@ -176,7 +195,7 @@ class CPU
     @pc = 0
     @program = program
     @running = true
-    @memory = {}
+    @memory = Memory.new
     @a = 0
     @x = 0
     @y = 0
@@ -190,7 +209,7 @@ class CPU
       @z = false
       @i = false
       @d = false
-      @b = false
+      @b = true
       @v = false
       @n = false
     end
