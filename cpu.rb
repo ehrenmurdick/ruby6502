@@ -145,6 +145,15 @@ class Program
     cpu.x = cpu.a
     cpu.flags.update 'nz', val
   end
+
+  %w{ c d i v }.each do |f|
+    opcode :"cl#{f}", %w{ ip } do |cpu, _, _, _|
+      cpu.flags.send(:"#{f}=", false)
+    end
+    opcode :"se#{f}", %w{ ip } do |cpu, _, _, _|
+      cpu.flags.send(:"#{f}=", true)
+    end
+  end
 end
 
 class CPU
@@ -175,14 +184,14 @@ class CPU
   end
 
   class Flags
-    attr_accessor :c, :z, :i, :d, :b, :o, :n
+    attr_accessor :c, :z, :i, :d, :b, :v, :n
     def initialize
       @c = false
       @z = false
       @i = false
       @d = false
       @b = false
-      @o = false
+      @v = false
       @n = false
     end
 
@@ -231,20 +240,30 @@ class CPU
   end
 
   def inspect
-%Q{6502 pc=#{pc} run=#{running ? 't' : 'f'} fs=#{flags.inspect}
+%Q{6502 pc=#{pc} run=#{running ? 't' : 'f'}
 #{@inst && @inst.asm}
-a=#{a.to_s(16)} x=#{x.to_s(16)} y=#{}
+a=#{hexify a} x=#{hexify x} y=#{hexify y}
+#{flags.inspect}
 #{hexify(memory)}
 -------}
   end
 end
 
-def hexify(hash)
-  h = {}
-  hash.each do |key, value|
-    h[key.to_s(16)] = value.to_s(16)
+def hexify(v)
+  case v
+  when Hash
+    h = {}
+    v.each do |key, value|
+      h[key.to_s(16)] = value.to_s(16)
+    end
+    return h
+  when Integer
+    return v.to_s(16).rjust(2, "0")
+  when Nil
+    return "00"
+  else
+    return v.to_i.to_s(16).rjust(2, "0")
   end
-  h
 end
 
 program = Program.load('example.s.rb')
