@@ -45,6 +45,10 @@ class Program
     },
   }
 
+  def debug &block
+    block.call self
+  end
+
   def self.opcode name, modes, &block
     modes.each do |mode|
       if mode == "ip"
@@ -56,6 +60,9 @@ class Program
         adr = args[0]
         outerBlock = lambda do |prg|
           line = lambda do |cpu|
+            if Symbol === adr
+              adr = prg.labels[adr]
+            end
             cpu.pc += 1
             value = nil
             final_addr = ADDR_MODES[mode].call(cpu, adr)
@@ -97,16 +104,17 @@ class Program
   end
 
   opcode :jmp, %w{ ab ia iax } do |cpu, prg, adr, _|
-    cpu.pc = prg.labels[adr]
+    cpu.pc = adr
   end
 
   opcode :jsr, %w{ ab } do |cpu, prg, adr, val|
-    cpu.push(cpu.pc + 1)
-    cpu.pc = prg.labels[val]
+    cpu.push(cpu.pc)
+    cpu.pc = adr
   end
 
   opcode :rts, %w{ ip } do |cpu, prg, adr, val|
-    cpu.pc = cpu.pop
+    v = cpu.pop
+    cpu.pc = v
   end
 
   opcode :ina, %w{ ip } do |cpu, prg, _, _|
@@ -281,6 +289,15 @@ class Memory < Hash
   def []=(key, value)
     super(key, value % 256)
   end
+
+  def to_s
+    r = []
+    each do |key, value|
+      r.unshift "#{hexify key}=#{hexify value}"
+    end
+
+    r.join(' ')
+  end
 end
 
 class CPU
@@ -300,15 +317,14 @@ class CPU
   register :a, :x, :y
 
   def push val
-    @sp -= 1
-    @sp = @sp % 256
+    @sp = (@sp - 1) % 0x100
     self[@sp] = val
   end
 
   def pop
-    @sp += 1
-    @sp = @sp % 256
-    self[@sp]
+    v = self[@sp]
+    @sp = (@sp + 1) % 0x100
+    return v
   end
 
   def read_register named
@@ -410,7 +426,7 @@ class CPU
 #{@inst && @inst.asm}
 a=#{hexify a} x=#{hexify x} y=#{hexify y}
 #{flags.inspect}
-#{hexify(memory)}
+#{memory}
 -------}
   end
 end
@@ -436,6 +452,6 @@ program = Program.load('example.s.rb')
 
 cpu = CPU.new(program)
 cpu.run do |c|
-  gets
   p c
+  gets
 end
