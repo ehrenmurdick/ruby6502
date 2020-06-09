@@ -2,45 +2,45 @@ class Program
   attr_accessor :ac, :labels, :src, :filename
 
   def self.load filename
-    prog = new
-    prog.instance_eval(File.read(filename), filename)
-    prog.filename = filename
-    prog
+    prg = new
+    prg.instance_eval(File.read(filename), filename)
+    prg.filename = filename
+    prg
   end
 
   ADDR_MODES = {
-    "ac" => ->(cpu, addr) { 'a' },
-    "ip" => ->(cpu, addr) { nil },
-    "im" => ->(cpu, addr) { nil },
-    "ab" => ->(cpu, addr) { addr },
-    "z"  => ->(cpu, addr) { addr },
-    "zx" => ->(cpu, addr) { addr + cpu.x },
-    "zy" => ->(cpu, addr) { addr + cpu.y },
-    "ax" => ->(cpu, addr) { addr + cpu.x},
-    "ay" => ->(cpu, addr) { addr + cpu.y },
-    "iz" => ->(cpu, addr) {
-      low = cpu.memory[addr]
-      high = cpu.memory[addr + 1] * 0x100
+    "ac" => ->(cpu, adr) { 'a' },
+    "ip" => ->(cpu, adr) { nil },
+    "im" => ->(cpu, adr) { nil },
+    "ab" => ->(cpu, adr) { adr },
+    "z"  => ->(cpu, adr) { adr },
+    "zx" => ->(cpu, adr) { adr + cpu.x },
+    "zy" => ->(cpu, adr) { adr + cpu.y },
+    "ax" => ->(cpu, adr) { adr + cpu.x},
+    "ay" => ->(cpu, adr) { adr + cpu.y },
+    "iz" => ->(cpu, adr) {
+      low = cpu.memory[adr]
+      high = cpu.memory[adr + 1] * 0x100
       low + high
     },
-    "ix" => ->(cpu, addr) {
-      low = cpu.memory[addr + cpu.x]
-      high = cpu.memory[addr + 1 + cpu.x] * 0x100
+    "ix" => ->(cpu, adr) {
+      low = cpu.memory[adr + cpu.x]
+      high = cpu.memory[adr + 1 + cpu.x] * 0x100
       low + high
     },
-    "iax" => ->(cpu, addr) {
-      low = cpu.memory[addr + cpu.x]
-      high = cpu.memory[addr + 1 + cpu.x] * 0x100
+    "iax" => ->(cpu, adr) {
+      low = cpu.memory[adr + cpu.x]
+      high = cpu.memory[adr + 1 + cpu.x] * 0x100
       low + high
     },
-    "iy" => ->(cpu, addr) {
-      low = cpu.memory[addr]
-      high = cpu.memory[addr + 1] * 0x100
+    "iy" => ->(cpu, adr) {
+      low = cpu.memory[adr]
+      high = cpu.memory[adr + 1] * 0x100
       low + high + cpu.y
     },
-    "ia" => ->(cpu, addr) {
-      low = cpu.memory[addr]
-      high = cpu.memory[addr + 1] * 0x100
+    "ia" => ->(cpu, adr) {
+      low = cpu.memory[adr]
+      high = cpu.memory[adr + 1] * 0x100
       low + high
     },
   }
@@ -53,24 +53,24 @@ class Program
         method_name = [name, mode].compact.join('_')
       end
       define_method(method_name.to_sym) do |*args|
-        addr = args[0]
-        outerBlock = lambda do |prog|
+        adr = args[0]
+        outerBlock = lambda do |prg|
           line = lambda do |cpu|
             cpu.pc += 1
             value = nil
-            final_addr = ADDR_MODES[mode].call(cpu, addr)
+            final_addr = ADDR_MODES[mode].call(cpu, adr)
             if !final_addr.nil?
               value = cpu[final_addr]
             else
-              value = addr
+              value = adr
             end
             block.call(cpu, self, final_addr, value)
           end
           line.define_singleton_method :asm do
-            %Q{#{method_name} #{addr ? addr.to_s(16) : addr}}
+            %Q{#{method_name} #{adr ? adr.to_s(16) : adr}}
           end
-          prog.src.append(line)
-          prog.ac += 1
+          prg.src.append(line)
+          prg.ac += 1
         end
         outerBlock.call(self)
       end
@@ -91,19 +91,19 @@ class Program
     labels[name] = ac
   end
 
-  opcode :adc, %w{ im z zx ab ax ay ix iy iz } do |cpu, _, addr, val|
+  opcode :adc, %w{ im z zx ab ax ay ix iy iz } do |cpu, _, adr, val|
     cpu.flags.update 'nvzc', (cpu.a + val)
     cpu.a += val
   end
 
-  opcode :jmp, %w{ ab } do |cpu, prog, _, label|
-    cpu.pc = prog.labels[label]
+  opcode :jmp, %w{ ab } do |cpu, prg, _, label|
+    cpu.pc = prg.labels[label]
   end
 
-  opcode :ina, %w{ im } do |cpu, prog, _, _|
+  opcode :ina, %w{ im } do |cpu, prg, _, _|
     cpu.a += 1
   end
-  opcode :inx, %w{ im } do |cpu, prog, _, _|
+  opcode :inx, %w{ im } do |cpu, prg, _, _|
     cpu.x += 1
   end
 
@@ -111,35 +111,35 @@ class Program
     cpu.running = false
   end
 
-  opcode :lda, %w{ im z zx ab ax ay ix iy iz } do |cpu, prog, addr, val|
+  opcode :lda, %w{ im z zx ab ax ay ix iy iz } do |cpu, prg, adr, val|
     cpu.a = val
     cpu.flags.update 'nz', val
   end
 
-  opcode :ldx, %w{ im z zy ab ay } do |cpu, prog, addr, val|
+  opcode :ldx, %w{ im z zy ab ay } do |cpu, prg, adr, val|
     cpu.x = val
     cpu.flags.update 'nz', val
   end
 
-  opcode :ldy, %w{ im z zy ab ay } do |cpu, prog, addr, val|
+  opcode :ldy, %w{ im z zy ab ay } do |cpu, prg, adr, val|
     cpu.y = val
     cpu.flags.update 'nz', val
   end
 
-  opcode :sta, %w{ z ax ab ax ay ix iy  iz } do |cpu, prog, addr, val|
-    cpu[addr] = cpu.a
+  opcode :sta, %w{ z ax ab ax ay ix iy  iz } do |cpu, prg, adr, val|
+    cpu[adr] = cpu.a
   end
 
-  opcode :stx, %w{ z zy ab } do |cpu, prog, addr, val|
-    cpu[addr] = cpu.x
+  opcode :stx, %w{ z zy ab } do |cpu, prg, adr, val|
+    cpu[adr] = cpu.x
   end
 
-  opcode :sty, %w{ z zy ab } do |cpu, prog, addr, val|
-    cpu[addr] = cpu.y
+  opcode :sty, %w{ z zy ab } do |cpu, prg, adr, val|
+    cpu[adr] = cpu.y
   end
 
-  opcode :stz, %w{ z zx ab ax } do |cpu, prog, addr, val|
-    cpu[addr] = 0
+  opcode :stz, %w{ z zx ab ax } do |cpu, prg, adr, val|
+    cpu[adr] = 0
   end
 
   opcode :tax, %w{ ip } do |cpu, _, _, val|
@@ -147,60 +147,60 @@ class Program
     cpu.flags.update 'nz', val
   end
 
-  opcode :asl, %w{ ac z ax ab ax } do |cpu, prog, addr, val|
+  opcode :asl, %w{ ac z ax ab ax } do |cpu, prg, adr, val|
     cpu.flags.c = !(val & 0b1000_0000).zero?
     val = val << 1
     cpu.flags.update 'nz', val
-    cpu[addr] = val
+    cpu[adr] = val
   end
 
-  opcode :lsr, %w{ ac z zx ab ax } do |cpu, prog, addr, val|
+  opcode :lsr, %w{ ac z zx ab ax } do |cpu, prg, adr, val|
     cpu.flags.c = !(val & 1).zero?
     val = val >> 1
     cpu.flags.update 'nz', cpu.a
-    cpu[addr] = val
+    cpu[adr] = val
   end
 
-  opcode :rol, %w{ ac z zx ab ax } do |cpu, prog, addr, val|
+  opcode :rol, %w{ ac z zx ab ax } do |cpu, prg, adr, val|
     carry = cpu.flags.c ? 1 : 0
     cpu.flags.c = !(val & 0b1000_0000).zero?
     val = carry + (val << 1)
     cpu.flags.update 'nz', val
-    cpu[addr] = val
+    cpu[adr] = val
   end
 
-  opcode :ror, %w{ ac z zx ab ax } do |cpu, prog, addr, val|
+  opcode :ror, %w{ ac z zx ab ax } do |cpu, prg, adr, val|
     carry = cpu.flags.c ? 128 : 0
     cpu.flags.c = !(val & 1).zero?
     val = carry + (val >> 1)
     cpu.flags.update 'nz', val
-    cpu[addr] = val
+    cpu[adr] = val
   end
 
-  opcode :and, %w{ im z zx ab ax ay ix iy iz } do |cpu, prog, addr, val|
+  opcode :and, %w{ im z zx ab ax ay ix iy iz } do |cpu, prg, adr, val|
     val = val & cpu.a
     cpu.flags.update 'nz', val
     cpu.a = val
   end
 
-  opcode :ora, %w{ im z zx ab ax ay ix iy iz } do |cpu, prog, addr, val|
+  opcode :ora, %w{ im z zx ab ax ay ix iy iz } do |cpu, prg, adr, val|
     val = val | cpu.a
     cpu.flags.update 'nz', val
     cpu.a = val
   end
 
-  opcode :eor, %w{ im z zx ab ax ay ix iy iz } do |cpu, prog, addr, val|
+  opcode :eor, %w{ im z zx ab ax ay ix iy iz } do |cpu, prg, adr, val|
     val = val ^ cpu.a
     cpu.flags.update 'nz', val
     cpu.a = val
   end
 
-  opcode :bit, %w{ im z zx ab ax ay ix iy iz } do |cpu, prog, addr, val|
+  opcode :bit, %w{ im z zx ab ax ay ix iy iz } do |cpu, prg, adr, val|
     val = val & cpu.a
     cpu.flags.update 'nzv', val
   end
 
-  opcode :cmp, %w{ im z zx ab ax ay ix iy iz } do |cpu, prog, addr, val|
+  opcode :cmp, %w{ im z zx ab ax ay ix iy iz } do |cpu, prg, adr, val|
     cpu.flags.n = false
     if cpu.a > val
       cpu.flags.c, cpu.flags.z = true, false
@@ -212,7 +212,7 @@ class Program
     end
   end
 
-  opcode :cpx, %w{ im z ab } do |cpu, prog, addr, val|
+  opcode :cpx, %w{ im z ab } do |cpu, prg, adr, val|
     cpu.flags.n = false
     if cpu.x > val
       cpu.flags.c, cpu.flags.z = true, false
@@ -224,7 +224,7 @@ class Program
     end
   end
 
-  opcode :cpy, %w{ im z ab } do |cpu, prog, addr, val|
+  opcode :cpy, %w{ im z ab } do |cpu, prg, adr, val|
     cpu.flags.n = false
     if cpu.y > val
       cpu.flags.c, cpu.flags.z = true, false
@@ -236,17 +236,20 @@ class Program
     end
   end
 
-  # LDA #$A6
-  # STA $00
-  # LDA #$33
-  # TRB $00
-  opcode :trb, %w{ z ab } do |cpu, prog, addr, val|
+  opcode :trb, %w{ z ab } do |cpu, prg, adr, val|
     cpu.flags.z = (val & cpu.a).zero?
-    a = cpu.a
-    cpu.a = cpu.a ^ 0xff
-    cpu.a = cpu.a & val
-    cpu[addr] = cpu.a
-    cpu.a = a
+    a = cpu.a ^ 0xff
+    a = cpu.a & val
+    cpu[adr] = a
+  end
+
+  opcode :tsb, %w{ z ab } do |cpu, prg, adr, val|
+    cpu.flags.z = (val & cpu.a).zero?
+    a = cpu.a | val
+    cpu[adr] = a
+  end
+
+  opcode :rmb, %w{ z ab } do |cpu, prg, adr, val|
   end
 
 
