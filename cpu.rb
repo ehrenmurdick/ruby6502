@@ -9,6 +9,7 @@ class Program
   end
 
   ADDR_MODES = {
+    "ac" => ->(cpu, addr) { 'a' },
     "ip" => ->(cpu, addr) { nil },
     "im" => ->(cpu, addr) { nil },
     "ab" => ->(cpu, addr) { addr },
@@ -59,7 +60,7 @@ class Program
             value = nil
             final_addr = ADDR_MODES[mode].call(cpu, addr)
             if !final_addr.nil?
-              value = cpu.memory[final_addr]
+              value = cpu[final_addr]
             else
               value = addr
             end
@@ -126,19 +127,19 @@ class Program
   end
 
   opcode :sta, %w{ z ax ab ax ay ix iy  iz } do |cpu, prog, addr, val|
-    cpu.memory[addr] = cpu.a
+    cpu[addr] = cpu.a
   end
 
   opcode :stx, %w{ z zy ab } do |cpu, prog, addr, val|
-    cpu.memory[addr] = cpu.x
+    cpu[addr] = cpu.x
   end
 
   opcode :sty, %w{ z zy ab } do |cpu, prog, addr, val|
-    cpu.memory[addr] = cpu.y
+    cpu[addr] = cpu.y
   end
 
   opcode :stz, %w{ z zx ab ax } do |cpu, prog, addr, val|
-    cpu.memory[addr] = 0
+    cpu[addr] = 0
   end
 
   opcode :tax, %w{ ip } do |cpu, _, _, val|
@@ -146,60 +147,34 @@ class Program
     cpu.flags.update 'nz', val
   end
 
-  opcode :asl_ac, %w{ ip } do |cpu, prog, addr, val|
-    cpu.flags.c = !(cpu.a & 0b1000_0000).zero?
-    cpu.a = cpu.a << 1
-    cpu.flags.update 'nz', cpu.a
-  end
-
-  opcode :asl, %w{ z ax ab ax } do |cpu, prog, addr, val|
+  opcode :asl, %w{ ac z ax ab ax } do |cpu, prog, addr, val|
     cpu.flags.c = !(val & 0b1000_0000).zero?
     val = val << 1
     cpu.flags.update 'nz', val
-    cpu.memory[addr] = val
+    cpu[addr] = val
   end
 
-  opcode :lsr_ac, %w{ ip } do |cpu, prog, addr, _|
-    cpu.flags.c = !(cpu.a & 1).zero?
-    cpu.a = cpu.a >> 1
-    cpu.flags.update 'nz', cpu.a
-  end
-
-  opcode :lsr, %w{ z zx ab ax } do |cpu, prog, addr, val|
+  opcode :lsr, %w{ ac z zx ab ax } do |cpu, prog, addr, val|
     cpu.flags.c = !(val & 1).zero?
     val = val >> 1
     cpu.flags.update 'nz', cpu.a
-    cpu.memory[addr] = val
+    cpu[addr] = val
   end
 
-  opcode :rol_ac, %w{ ip } do |cpu, prog, addr, _|
-    carry = cpu.flags.c ? 1 : 0
-    cpu.flags.c = !(cpu.a & 0b1000_0000).zero?
-    cpu.a = carry + (cpu.a << 1)
-    cpu.flags.update 'nz', cpu.a
-  end
-
-  opcode :rol, %w{ z zx ab ax } do |cpu, prog, addr, val|
+  opcode :rol, %w{ ac z zx ab ax } do |cpu, prog, addr, val|
     carry = cpu.flags.c ? 1 : 0
     cpu.flags.c = !(val & 0b1000_0000).zero?
     val = carry + (val << 1)
     cpu.flags.update 'nz', val
-    cpu.memory[addr] = val
+    cpu[addr] = val
   end
 
-  opcode :ror_ac, %w{ ip } do |cpu, prog, addr, _|
-    carry = cpu.flags.c ? 128 : 0
-    cpu.flags.c = !(cpu.a & 1).zero?
-    cpu.a = carry + (cpu.a >> 1)
-    cpu.flags.update 'nz', cpu.a
-  end
-
-  opcode :ror, %w{ z zx ab ax } do |cpu, prog, addr, val|
+  opcode :ror, %w{ ac z zx ab ax } do |cpu, prog, addr, val|
     carry = cpu.flags.c ? 128 : 0
     cpu.flags.c = !(val & 1).zero?
     val = carry + (val >> 1)
     cpu.flags.update 'nz', val
-    cpu.memory[addr] = val
+    cpu[addr] = val
   end
 
   opcode :and, %w{ im z zx ab ax ay ix iy iz } do |cpu, prog, addr, val|
@@ -260,15 +235,41 @@ class CPU
   def self.register *names
     names.each do |name|
       define_method(name) do
-        instance_variable_get("@#{name}")
+        read_register(name)
       end
 
       define_method(:"#{name}=") do |v|
-        instance_variable_set("@#{name}", v.to_i % 256)
+        write_register(name, v)
       end
     end
   end
   register :a, :x, :y
+
+  def read_register named
+    instance_variable_get("@#{named}")
+  end
+
+  def write_register named, value
+    instance_variable_set("@#{named}", value.to_i % 256)
+  end
+
+  def [](index)
+    case index
+    when Numeric
+      return memory[index]
+    when String
+      return read_register(index)
+    end
+  end
+
+  def []=(index, value)
+    case index
+    when Numeric
+      return memory[index] = value
+    when String
+      return write_register(index, value)
+    end
+  end
 
   def initialize(program)
     @pc = 0
