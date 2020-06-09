@@ -96,11 +96,20 @@ class Program
     cpu.a += val
   end
 
-  opcode :jmp, %w{ ab } do |cpu, prg, _, label|
-    cpu.pc = prg.labels[label]
+  opcode :jmp, %w{ ab ia iax } do |cpu, prg, adr, _|
+    cpu.pc = prg.labels[adr]
   end
 
-  opcode :ina, %w{ im } do |cpu, prg, _, _|
+  opcode :jsr, %w{ ab } do |cpu, prg, adr, val|
+    cpu.push(cpu.pc + 1)
+    cpu.pc = prg.labels[val]
+  end
+
+  opcode :rts, %w{ ip } do |cpu, prg, adr, val|
+    cpu.pc = cpu.pop
+  end
+
+  opcode :ina, %w{ ip } do |cpu, prg, _, _|
     cpu.a += 1
   end
   opcode :inx, %w{ im } do |cpu, prg, _, _|
@@ -249,7 +258,12 @@ class Program
     cpu[adr] = a
   end
 
-  opcode :rmb, %w{ z ab } do |cpu, prg, adr, val|
+  opcode :pha, %w{ ip } do |cpu, prg, adr, val|
+    cpu.push(cpu.a)
+  end
+
+  opcode :pla, %w{ ip } do |cpu, prg, adr, val|
+    cpu.a = cpu.pop
   end
 
 
@@ -270,7 +284,7 @@ class Memory < Hash
 end
 
 class CPU
-  attr_accessor :pc, :program, :running, :memory, :flags
+  attr_accessor :pc, :program, :running, :memory, :flags, :sp
 
   def self.register *names
     names.each do |name|
@@ -284,6 +298,18 @@ class CPU
     end
   end
   register :a, :x, :y
+
+  def push val
+    @sp -= 1
+    @sp = @sp % 256
+    self[@sp] = val
+  end
+
+  def pop
+    @sp += 1
+    @sp = @sp % 256
+    self[@sp]
+  end
 
   def read_register named
     instance_variable_get("@#{named}")
@@ -312,6 +338,7 @@ class CPU
   end
 
   def initialize(program)
+    @sp = 0
     @pc = 0
     @program = program
     @running = true
@@ -379,7 +406,7 @@ class CPU
   end
 
   def inspect
-%Q{6502 pc=#{pc} run=#{running ? 't' : 'f'}
+%Q{6502 pc=#{hexify(pc)} sp=#{hexify(sp)} run=#{running ? 't' : 'f'}
 #{@inst && @inst.asm}
 a=#{hexify a} x=#{hexify x} y=#{hexify y}
 #{flags.inspect}
@@ -398,7 +425,7 @@ def hexify(v)
     return h
   when Integer
     return v.to_s(16).rjust(2, "0")
-  when Nil
+  when nil
     return "00"
   else
     return v.to_i.to_s(16).rjust(2, "0")
@@ -409,5 +436,6 @@ program = Program.load('example.s.rb')
 
 cpu = CPU.new(program)
 cpu.run do |c|
+  gets
   p c
 end
