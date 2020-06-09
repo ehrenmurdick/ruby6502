@@ -212,6 +212,43 @@ class Program
     end
   end
 
+  opcode :cpx, %w{ im z ab } do |cpu, prog, addr, val|
+    cpu.flags.n = false
+    if cpu.x > val
+      cpu.flags.c, cpu.flags.z = true, false
+    elsif cpu.x < val
+      cpu.flags.n = true
+      cpu.flags.c, cpu.flags.z = false, false
+    else
+      cpu.flags.c, cpu.flags.z = true, true
+    end
+  end
+
+  opcode :cpy, %w{ im z ab } do |cpu, prog, addr, val|
+    cpu.flags.n = false
+    if cpu.y > val
+      cpu.flags.c, cpu.flags.z = true, false
+    elsif cpu.y < val
+      cpu.flags.n = true
+      cpu.flags.c, cpu.flags.z = false, false
+    else
+      cpu.flags.c, cpu.flags.z = true, true
+    end
+  end
+
+  # LDA #$A6
+  # STA $00
+  # LDA #$33
+  # TRB $00
+  opcode :trb, %w{ z ab } do |cpu, prog, addr, val|
+    cpu.flags.z = (val & cpu.a).zero?
+    a = cpu.a
+    cpu.a = cpu.a ^ 0xff
+    cpu.a = cpu.a & val
+    cpu[addr] = cpu.a
+    cpu.a = a
+  end
+
 
   %w{ c d i v }.each do |f|
     opcode :"cl#{f}", %w{ ip } do |cpu, _, _, _|
@@ -275,7 +312,7 @@ class CPU
     @pc = 0
     @program = program
     @running = true
-    @memory = Memory.new
+    @memory = Memory.new(0)
     @a = 0
     @x = 0
     @y = 0
@@ -370,5 +407,4 @@ program = Program.load('example.s.rb')
 cpu = CPU.new(program)
 cpu.run do |c|
   p c
-  gets
 end
